@@ -27,7 +27,7 @@ async function produceMessage() {
       messages: [
         { key: 'key0', value: 'Message for Partition 1' },
         { key: 'key1', value: 'Message for Partition 2' },
-        { key: 'key3', value: 'Message for Partition 3' },
+        { key: 'key2', value: 'Message for Partition 3' },
       ],
     });
     await sleep(1000);
