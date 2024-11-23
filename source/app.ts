@@ -1,8 +1,8 @@
 import { Kafka } from 'kafkajs';
 import dotenv from 'dotenv';
+import murmurhash from "murmurhash";
 // Determine the environment and load the corresponding .env file
 const envFile = `.env.${process.env.NODE_ENV}`;
-
 // Load environment variables from .env file
 dotenv.config({path: envFile});
 
@@ -37,15 +37,21 @@ async function produceMessage() {
   await producer.connect();
   console.log('Producer connected');
   const topic = 'test-topic';
+
+  // // Send a message with a specific key
+  // const key = "key0";
+  // const numPartitions = 3;
+  // const partition = calculatePartition(key, numPartitions);
+
   let times = 1
   while (times <= 1000) {
     // Send a message
     await producer.send({
       topic,
       messages: [
-        { key: 'key0', value: 'Message for Partition 1' },
-        { key: 'key1', value: 'Message for Partition 2' },
-        { key: 'key2', value: 'Message for Partition 3' },
+        { key: 'key0', value: getRandomMessage() },
+        { key: 'key1', value: getRandomMessage() },
+        { key: 'key2', value: getRandomMessage() },
       ],
     });
     console.log("Sent");
@@ -65,3 +71,30 @@ produceMessage().catch((err) => {
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
+
+// Murmur2 hash function
+function calculatePartition(key: string, numPartitions: number): number {
+  const hash = murmurhash.v3(key);
+  return Math.abs(hash) % numPartitions;
+}
+
+
+const MESSAGES: string[] = [
+  "Hello, world!",
+  "TypeScript is awesome!",
+  "Random message generated.",
+  "Keep learning and coding!",
+  "Node.js is powerful!",
+  "Express.js is powerful!",
+  "Ruby is awesome!",
+  "Ruby on Rails is awesome!",
+  "Pacific Ocrean",
+  "Atlantic Ocrean",
+  "Hind Ocrean",
+  "Antarcatica Ocrean",
+];
+
+function getRandomMessage(): string {
+  const randomIndex = Math.floor(Math.random() * MESSAGES.length);
+  return MESSAGES[randomIndex];
+}
