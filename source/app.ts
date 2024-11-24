@@ -35,7 +35,7 @@ const kafka = new Kafka({
   clientId: 'my-producer',
   brokers: BROCKER_LISTS,
   ssl: CONFIGURATIONS.SSL,
-  sasl: CONFIGURATIONS.SASL,
+  sasl: undefined,
 });
 
 const producer = kafka.producer({
