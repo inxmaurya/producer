@@ -1,10 +1,8 @@
 import { Kafka } from 'kafkajs';
 import dotenv from 'dotenv';
-import murmurhash from "murmurhash";
-// Determine the environment and load the corresponding .env file
-const envFile = `.env.${process.env.NODE_ENV}`;
-// Load environment variables from .env file
-dotenv.config({path: envFile});
+import murmurhash from 'murmurhash';
+
+dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
 
 const BROCKER_LISTS = [
   process.env.FIRST_BROKER!,
@@ -15,87 +13,93 @@ const BROCKER_LISTS = [
   process.env.SIXTH_BROKER!,
 ];
 
+if (!BROCKER_LISTS.every(Boolean)) {
+  throw new Error('One or more Kafka broker addresses are missing from the environment variables.');
+}
+
 const CONFIGURATIONS = {
-  SSL: (process.env.SSL! === 'true'),
-  SASL: undefined
+  SSL: process.env.SSL === 'true',
+  SASL: process.env.SASL_USERNAME && process.env.SASL_PASSWORD ? {
+    mechanism: 'scram-sha-256',
+    username: process.env.SASL_USERNAME!,
+    password: process.env.SASL_PASSWORD!,
+  } : undefined,
 };
 
-console.log("------------------------");
-console.log(BROCKER_LISTS);
-console.log(CONFIGURATIONS);
-console.log("------------------------");
+console.log('Kafka Configuration:');
+console.log(`Brokers: ${BROCKER_LISTS.join(', ')}`);
+console.log(`SSL: ${CONFIGURATIONS.SSL}`);
+console.log(`SASL: ${CONFIGURATIONS.SASL ? 'Enabled' : 'Disabled'}`);
 
 const kafka = new Kafka({
   clientId: 'my-producer',
   brokers: BROCKER_LISTS,
-  ssl: CONFIGURATIONS['SSL'],
-  sasl: CONFIGURATIONS['SASL'], // Set this if SASL is required.
+  ssl: CONFIGURATIONS.SSL,
+  sasl: CONFIGURATIONS.SASL,
 });
 
-const producer = kafka.producer();
+const producer = kafka.producer({
+  retry: {
+    retries: 5,
+    initialRetryTime: 300,
+  },
+});
 
 async function produceMessage() {
-  await producer.connect();
-  console.log('Producer connected');
-  const topic = 'test-topic';
+  try {
+    await producer.connect();
+    console.log('Producer connected');
+    const topic = 'test-topic';
 
-  // // Send a message with a specific key
-  // const key = "key0";
-  // const numPartitions = 3;
-  // const partition = calculatePartition(key, numPartitions);
-
-  let times = 1
-  while (times <= 1000) {
-    // Send a message
-    await producer.send({
-      topic,
-      messages: [
-        { key: 'key0', value: getRandomMessage() },
-        { key: 'key1', value: getRandomMessage() },
-        { key: 'key2', value: getRandomMessage() },
-      ],
-    });
-    console.log("Sent");
-    await sleep(1000);
-    times = times + 1;
+    for (let i = 0; i < 1000; i++) {
+      await producer.send({
+        topic,
+        messages: [
+          { key: 'key0', value: getRandomMessage() },
+          { key: 'key1', value: getRandomMessage() },
+          { key: 'key2', value: getRandomMessage() },
+        ],
+      });
+      console.log(`Batch ${i + 1} sent`);
+      await sleep(1000);
+    }
+  } catch (err) {
+    console.error('Error in producer:', err);
+  } finally {
+    await producer.disconnect();
+    console.log('Producer disconnected');
   }
-
-  console.log('Message sent');
-  await producer.disconnect();
 }
-
-produceMessage().catch((err) => {
-  console.error('Error in producer:', err);
-  producer.disconnect();
-});
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-};
-
-// Murmur2 hash function
-function calculatePartition(key: string, numPartitions: number): number {
-  const hash = murmurhash.v3(key);
-  return Math.abs(hash) % numPartitions;
 }
-
-
-const MESSAGES: string[] = [
-  "Hello, world!",
-  "TypeScript is awesome!",
-  "Random message generated.",
-  "Keep learning and coding!",
-  "Node.js is powerful!",
-  "Express.js is powerful!",
-  "Ruby is awesome!",
-  "Ruby on Rails is awesome!",
-  "Pacific Ocrean",
-  "Atlantic Ocrean",
-  "Hind Ocrean",
-  "Antarcatica Ocrean",
-];
 
 function getRandomMessage(): string {
-  const randomIndex = Math.floor(Math.random() * MESSAGES.length);
-  return MESSAGES[randomIndex];
+  const MESSAGES = [
+    'Hello, world!',
+    'TypeScript is awesome!',
+    'Random message generated.',
+    'Keep learning and coding!',
+    'Node.js is powerful!',
+    'Express.js is powerful!',
+    'Ruby is awesome!',
+    'Ruby on Rails is awesome!',
+    'Pacific Ocean',
+    'Atlantic Ocean',
+    'Indian Ocean',
+    'Antarctic Ocean',
+  ];
+  return MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
 }
+
+produceMessage().catch(err => {
+  console.error('Error during message production:', err);
+  producer.disconnect();
+});
+
+process.on('SIGINT', async () => {
+  console.log('Interrupt signal received. Cleaning up...');
+  await producer.disconnect();
+  process.exit(0);
+});
